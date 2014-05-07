@@ -1,7 +1,9 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Runtime;
 using ScriptCs.Argument;
 using ScriptCs.Command;
+using ScriptCs.Contracts;
 using ScriptCs.Hosting;
 
 namespace ScriptCs
@@ -10,10 +12,15 @@ namespace ScriptCs
     {
         private static int Main(string[] args)
         {
-            ProfileOptimization.SetProfileRoot(typeof(Program).Assembly.Location);
-            ProfileOptimization.StartProfile(typeof(Program).Assembly.GetName().Name + ".profile");
+#if !MONO
+            if (Type.GetType("Mono.Runtime") == null)
+            {
+                ProfileOptimization.SetProfileRoot(typeof(Program).Assembly.Location);
+                ProfileOptimization.StartProfile(typeof(Program).Assembly.GetName().Name + ".profile");
+            }
 
-            var console = new ScriptConsole();
+#endif
+            IConsole console = new ScriptConsole();
 
             var parser = new ArgumentHandler(new ArgumentParser(console), new ConfigFileParser(console), new FileSystem());
             var arguments = parser.Parse(args);
@@ -21,10 +28,15 @@ namespace ScriptCs
             var commandArgs = arguments.CommandArguments;
             var scriptArgs = arguments.ScriptArguments;
 
+            if (!string.IsNullOrWhiteSpace(commandArgs.Output))
+            {
+                console = new FileConsole(commandArgs.Output, console);
+            }
+
             var configurator = new LoggerConfigurator(commandArgs.LogLevel);
             configurator.Configure(console);
             var logger = configurator.GetLogger();
- 
+
             var scriptServicesBuilder = new ScriptServicesBuilder(console, logger)
                 .Cache(commandArgs.Cache)
                 .Debug(commandArgs.Debug)
@@ -43,7 +55,7 @@ namespace ScriptCs
                 // to make sure it's given to the LoadModules below.
                 extension = ".csx";
 
-                if (!string.IsNullOrWhiteSpace(commandArgs.ScriptName)) 
+                if (!string.IsNullOrWhiteSpace(commandArgs.ScriptName))
                 {
                     // If the was in fact a script specified, we'll extend it
                     // with the default extension, assuming the user giving
@@ -55,11 +67,10 @@ namespace ScriptCs
                     commandArgs.ScriptName += extension;
                 }
             }
-            
-            scriptServicesBuilder.LoadModules(extension, modules);
-            var scriptServiceRoot = scriptServicesBuilder.Build();
 
-            var commandFactory = new CommandFactory(scriptServiceRoot);
+            scriptServicesBuilder.LoadModules(extension, modules);
+
+            var commandFactory = new CommandFactory(scriptServicesBuilder);
             var command = commandFactory.CreateCommand(commandArgs, scriptArgs);
 
             var result = command.Execute();
