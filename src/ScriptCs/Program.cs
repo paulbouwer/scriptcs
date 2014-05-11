@@ -1,10 +1,12 @@
 ﻿using System;
 using System.IO;
+using System.Reflection;
 using System.Runtime;
 using ScriptCs.Argument;
 using ScriptCs.Command;
 using ScriptCs.Contracts;
 using ScriptCs.Hosting;
+using System.Runtime.CompilerServices;
 
 namespace ScriptCs
 {
@@ -12,14 +14,8 @@ namespace ScriptCs
     {
         private static int Main(string[] args)
         {
-#if !MONO
-            if (Type.GetType("Mono.Runtime") == null)
-            {
-                ProfileOptimization.SetProfileRoot(typeof(Program).Assembly.Location);
-                ProfileOptimization.StartProfile(typeof(Program).Assembly.GetName().Name + ".profile");
-            }
+            SetProfile();
 
-#endif
             IConsole console = new ScriptConsole();
 
             var parser = new ArgumentHandler(new ArgumentParser(console), new ConfigFileParser(console), new FileSystem());
@@ -88,6 +84,19 @@ namespace ScriptCs
             }
 
             return modules;
+        }
+
+        private static void SetProfile()
+        {
+            var profileOptimizationType = Type.GetType("System.Runtime.ProfileOptimization");
+            if (profileOptimizationType != null)
+            {
+                var setProfileRoot = profileOptimizationType.GetMethod("SetProfileRoot", BindingFlags.Public | BindingFlags.Static);
+                setProfileRoot.Invoke(null, new object[] {typeof (Program).Assembly.Location});
+
+                var startProfile = profileOptimizationType.GetMethod("StartProfile", BindingFlags.Public | BindingFlags.Static);
+                startProfile.Invoke(null, new object[] {typeof (Program).Assembly.GetName().Name + ".profile"});
+            }
         }
     }
 }
