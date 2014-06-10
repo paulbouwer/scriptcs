@@ -57,6 +57,11 @@ namespace ScriptCs.Hosting
             }
         }
 
+        protected IDictionary<Type, object> Overrides
+        {
+            get { return _overrides; }
+        }
+
         protected abstract IContainer CreateContainer();
     }
 }

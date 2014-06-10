@@ -118,7 +118,7 @@ namespace ScriptCs
 
         public virtual string ModulesFolder
         {
-            get 
+            get
             {
                 return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "scriptcs");
             }
@@ -156,6 +156,31 @@ namespace ScriptCs
         public virtual string HostBin
         {
             get { return AppDomain.CurrentDomain.BaseDirectory; }
+        }
+
+        public virtual string BinFolder
+        {
+            get { return "bin"; }
+        }
+
+        public virtual string DllCacheFolder
+        {
+            get { return ".cache"; }
+        }
+
+        public virtual string PackagesFile
+        {
+            get { return "packages.config"; }
+        }
+
+        public virtual string PackagesFolder
+        {
+            get { return "packages"; }
+        }
+
+        public virtual string NugetFile
+        {
+            get { return "nuget.config"; }
         }
     }
 }

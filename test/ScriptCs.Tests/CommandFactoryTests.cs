@@ -22,6 +22,9 @@ namespace ScriptCs.Tests
                 var fixture = new Fixture().Customize(new AutoMoqCustomization());
                 var fileSystem = fixture.Freeze<Mock<IFileSystem>>();
                 fileSystem.SetupGet(x => x.CurrentDirectory).Returns(CurrentDirectory);
+                fileSystem.SetupGet(x => x.PackagesFile).Returns("packages.config");
+                fileSystem.SetupGet(x => x.PackagesFolder).Returns("packages");
+                fileSystem.SetupGet(x => x.DllCacheFolder).Returns(".cache");
                 fileSystem.Setup(x => x.FileExists(PackagesFile)).Returns(packagesFileExists);
                 fileSystem.Setup(x => x.DirectoryExists(PackagesFolder)).Returns(packagesFolderExists);
 
@@ -99,7 +102,7 @@ namespace ScriptCs.Tests
 
                 compositeCommand.Commands.Count.ShouldEqual(2);
                 compositeCommand.Commands[0].ShouldImplement<IInstallCommand>();
-                compositeCommand.Commands[1].ShouldImplement<IScriptCommand>();
+                compositeCommand.Commands[1].ShouldImplement<IDeferredCreationCommand<IScriptCommand>>();
             }
 
             [Fact]

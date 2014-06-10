@@ -1,4 +1,4 @@
-﻿namespace ScriptCs.SyntaxTreeParser.Visitors
+﻿namespace ScriptCs.Engine.Mono.Parser.Visitors
 {
     using System.Collections.Generic;
 
@@ -13,7 +13,7 @@
             _classes = new List<TypeDeclaration>();
         }
 
-        internal List<TypeDeclaration> GetClassDeclarations()
+        internal IList<TypeDeclaration> GetClassDeclarations()
         {
             return _classes;
         }

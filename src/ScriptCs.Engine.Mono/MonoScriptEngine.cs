@@ -1,12 +1,13 @@
-﻿using System;
+﻿extern alias MonoCSharp;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using Common.Logging;
-using Mono.CSharp;
+using MonoCSharp::Mono.CSharp;
 using ScriptCs.Contracts;
-using ScriptCs.SyntaxTreeParser;
+using ScriptCs.Engine.Mono.Parser;
 
 namespace ScriptCs.Engine.Mono
 {
@@ -46,14 +47,7 @@ namespace ScriptCs.Engine.Mono
                 }, new ConsoleReportPrinter());
 
                 var evaluator = new Evaluator(context);
-                var builder = new StringBuilder();
-
-                foreach (var ns in namespaces.Union(scriptPackSession.Namespaces).Distinct())
-                {
-                    builder.AppendLine(string.Format("using {0};", ns));
-                }
-
-                evaluator.Compile(builder.ToString());
+                var allNamespaces = namespaces.Union(scriptPackSession.Namespaces).Distinct();
 
                 var host = _scriptHostFactory.CreateScriptHost(new ScriptPackManager(scriptPackSession.Contexts), scriptArgs);
                 MonoHost.SetHost((ScriptHost)host);
@@ -63,9 +57,13 @@ namespace ScriptCs.Engine.Mono
 
                 sessionState = new SessionState<Evaluator>
                 {
-                    References = new AssemblyReferences { Assemblies = new HashSet<Assembly>(references.Assemblies), PathReferences = new HashSet<string>(references.PathReferences) },
+                    References = new AssemblyReferences(references.PathReferences, references.Assemblies),
+                    Namespaces = new HashSet<string>(),
                     Session = evaluator
                 };
+
+                ImportNamespaces(allNamespaces, sessionState);
+
                 scriptPackSession.State[SessionKey] = sessionState;
             }
             else
@@ -80,11 +78,10 @@ namespace ScriptCs.Engine.Mono
                     sessionState.Session.LoadAssembly(reference);
                 }
 
-                sessionState.References = new AssemblyReferences
-                {
-                    Assemblies = new HashSet<Assembly>(references.Assemblies),
-                    PathReferences = new HashSet<string>(references.PathReferences)
-                };
+                sessionState.References = new AssemblyReferences(references.PathReferences, references.Assemblies);
+
+                var newNamespaces = sessionState.Namespaces == null ? namespaces : namespaces.Except(sessionState.Namespaces);
+                ImportNamespaces(newNamespaces, sessionState);
             }
 
             Logger.Debug("Starting execution");
@@ -92,14 +89,26 @@ namespace ScriptCs.Engine.Mono
             try
             {
                 var parseResult = parser.Parse(code);
-                if (!string.IsNullOrWhiteSpace(parseResult.TypeDeclarations))
+
+                if (parseResult.TypeDeclarations != null && parseResult.TypeDeclarations.Any())
                 {
-                    sessionState.Session.Compile(parseResult.TypeDeclarations);
+                    foreach (var @class in parseResult.TypeDeclarations)
+                    {
+                        sessionState.Session.Compile(@class);
+                    }
                 }
 
-                if (!string.IsNullOrWhiteSpace(parseResult.MethodDeclarations))
+                if (parseResult.MethodExpressions != null && parseResult.MethodExpressions.Any())
                 {
-                    sessionState.Session.Run(parseResult.MethodDeclarations);
+                    foreach (var prototype in parseResult.MethodPrototypes)
+                    {
+                        sessionState.Session.Run(prototype);
+                    }
+
+                    foreach (var method in parseResult.MethodExpressions)
+                    {
+                        sessionState.Session.Run(method);
+                    }
                 }
 
                 if (!string.IsNullOrWhiteSpace(parseResult.Evaluations))
@@ -110,15 +119,28 @@ namespace ScriptCs.Engine.Mono
                     sessionState.Session.Evaluate(parseResult.Evaluations, out scriptResult, out resultSet);
 
                     Logger.Debug("Finished execution");
-                    return new ScriptResult { ReturnValue = scriptResult };
+
+                    return new ScriptResult(returnValue: scriptResult);
                 }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                Logger.Error(e.Message);
+                return new ScriptResult(executionException: ex);
             }
 
-            return new ScriptResult();
+            return ScriptResult.Empty;
+        }
+
+        private void ImportNamespaces(IEnumerable<string> namespaces, SessionState<Evaluator> sessionState)
+        {
+            var builder = new StringBuilder();
+            foreach (var ns in namespaces)
+            {
+                Logger.DebugFormat(ns);
+                builder.AppendLine(string.Format("using {0};", ns));
+                sessionState.Namespaces.Add(ns);
+            }
+            sessionState.Session.Compile(builder.ToString());
         }
     }
 }

@@ -13,7 +13,6 @@ namespace ScriptCs.Hosting
 {
     public class RuntimeServices : ScriptServicesRegistration, IRuntimeServices
     {
-        private readonly IList<Type> _lineProcessors;
         private readonly IConsole _console;
         private readonly Type _scriptEngineType;
         private readonly Type _scriptExecutorType;
@@ -21,10 +20,9 @@ namespace ScriptCs.Hosting
         private readonly IInitializationServices _initializationServices;
         private readonly string _scriptName;
 
-        public RuntimeServices(ILog logger, IDictionary<Type, object> overrides, IList<Type> lineProcessors, IConsole console, Type scriptEngineType, Type scriptExecutorType, bool initDirectoryCatalog, IInitializationServices initializationServices, string scriptName) : 
+        public RuntimeServices(ILog logger, IDictionary<Type, object> overrides, IConsole console, Type scriptEngineType, Type scriptExecutorType, bool initDirectoryCatalog, IInitializationServices initializationServices, string scriptName) :
             base(logger, overrides)
         {
-            _lineProcessors = lineProcessors;
             _console = console;
             _scriptEngineType = scriptEngineType;
             _scriptExecutorType = scriptExecutorType;
@@ -44,6 +42,7 @@ namespace ScriptCs.Hosting
             builder.RegisterType<ScriptServices>().SingleInstance();
 
             RegisterLineProcessors(builder);
+            RegisterReplCommands(builder);
 
             RegisterOverrideOrDefault<IFileSystem>(builder, b => b.RegisterType<FileSystem>().As<IFileSystem>().SingleInstance());
             RegisterOverrideOrDefault<IAssemblyUtility>(builder, b => b.RegisterType<AssemblyUtility>().As<IAssemblyUtility>().SingleInstance());
@@ -60,7 +59,7 @@ namespace ScriptCs.Hosting
             RegisterOverrideOrDefault<IConsole>(builder, b => b.RegisterInstance(_console));
 
             var assemblyResolver = _initializationServices.GetAssemblyResolver();
-            
+
             if (_initDirectoryCatalog)
             {
                 var fileSystem = _initializationServices.GetFileSystem();
@@ -90,7 +89,7 @@ namespace ScriptCs.Hosting
                             }
                         }
                     }
-                    catch(Exception ex)
+                    catch (Exception ex)
                     {
                         assemblyLoadFailures = true;
                         Logger.DebugFormat("Failure loading assembly: {0}. Exception: {1}", assembly, ex.Message);
@@ -110,21 +109,31 @@ namespace ScriptCs.Hosting
 
         private void RegisterLineProcessors(ContainerBuilder builder)
         {
-            var loadProcessorType = _lineProcessors
-                .FirstOrDefault(x => typeof(ILoadLineProcessor).IsAssignableFrom(x)) 
+            object processors;
+            this.Overrides.TryGetValue(typeof(ILineProcessor), out processors);
+            var processorList = (processors as IEnumerable<Type> ?? Enumerable.Empty<Type>()).ToArray();
+
+            var loadProcessorType = processorList
+                .FirstOrDefault(x => typeof(ILoadLineProcessor).IsAssignableFrom(x))
                 ?? typeof(LoadLineProcessor);
 
-            var usingProcessorType = _lineProcessors
+            var usingProcessorType = processorList
                 .FirstOrDefault(x => typeof(IUsingLineProcessor).IsAssignableFrom(x))
                 ?? typeof(UsingLineProcessor);
 
-            var referenceProcessorType = _lineProcessors
+            var referenceProcessorType = processorList
                 .FirstOrDefault(x => typeof(IReferenceLineProcessor).IsAssignableFrom(x))
                 ?? typeof(ReferenceLineProcessor);
 
-            var lineProcessors = new[] { loadProcessorType, usingProcessorType, referenceProcessorType }.Union(_lineProcessors);
+            var processorArray = new[] { loadProcessorType, usingProcessorType, referenceProcessorType }.Union(processorList).ToArray();
 
-            builder.RegisterTypes(lineProcessors.ToArray()).As<ILineProcessor>();
+            builder.RegisterTypes(processorArray).As<ILineProcessor>();
+        }
+
+        private void RegisterReplCommands(ContainerBuilder builder)
+        {
+            var replCommands = AppDomain.CurrentDomain.GetAssemblies().Where(x => !x.IsDynamic).SelectMany(x => x.GetExportedTypes()).Where(x => typeof(IReplCommand).IsAssignableFrom(x) && x.IsClass && !x.IsAbstract);
+            builder.RegisterTypes(replCommands.ToArray()).As<IReplCommand>();
         }
 
         public ScriptServices GetScriptServices()

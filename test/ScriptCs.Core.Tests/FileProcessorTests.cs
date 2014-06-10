@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Common.Logging;
 using Moq;
-
 using ScriptCs.Contracts;
-
+using ScriptCs.Contracts.Exceptions;
 using Should;
 using Xunit;
-using ScriptCs.Contracts.Exceptions;
 
 namespace ScriptCs.Tests
 {
@@ -510,7 +508,7 @@ namespace ScriptCs.Tests
                 return new FilePreProcessor(_fileSystem.Object, Mock.Of<ILog>(), lineProcessors);
             }
         }
-        
+
         public class ProcessScriptMethod
         {
             private readonly Mock<IFileSystem> _fileSystem;
@@ -527,7 +525,7 @@ namespace ScriptCs.Tests
             {
                 var preProcessor = GetFilePreProcessor();
                 var script = @"Console.WriteLine(""Testing..."");";
-                
+
                 preProcessor.ProcessScript(script);
 
                 _fileSystem.Verify(x => x.SplitLines(script), Times.Once());
@@ -538,7 +536,7 @@ namespace ScriptCs.Tests
             {
                 var preProcessor = GetFilePreProcessor();
                 var script = @"Console.WriteLine(""Testing..."");";
-                
+
                 preProcessor.ProcessScript(script);
 
                 _fileSystem.Verify(x => x.ReadFileLines(It.IsAny<string>()), Times.Never());
@@ -554,7 +552,7 @@ namespace ScriptCs.Tests
 
                 var preProcessor = GetFilePreProcessor();
                 var script = @"#load script1.csx";
-                
+
                 var result = preProcessor.ProcessScript(script);
                 var fileLines = result.Code.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
 
@@ -571,6 +569,76 @@ namespace ScriptCs.Tests
                 };
 
                 return new FilePreProcessor(_fileSystem.Object, Mock.Of<ILog>(), lineProcessors);
+            }
+        }
+
+        public class TheParseScriptMethod
+        {
+            private readonly Mock<IFileSystem> _fileSystem;
+
+            public TheParseScriptMethod()
+            {
+                _fileSystem = new Mock<IFileSystem>();
+                _fileSystem.SetupGet(x => x.NewLine).Returns(Environment.NewLine);
+                _fileSystem.Setup(fs => fs.GetFullPath(It.IsAny<string>())).Returns<string>((path) => path);
+            }
+
+            [Fact]
+            public void ShouldProcessCustomDirectiveWhenItComesBeforeCode()
+            {
+                var testableDirectiveProcessor = new DirectiveLineProcessorTests.TestableDirectiveLineProcessor();
+                var filePreprocessor = GetFilePreProcessor(testableDirectiveProcessor, new LoadLineProcessor(_fileSystem.Object));
+                var lines = new List<string>
+                    {
+                        "#Test something",
+                        "Console.WriteLine(\"Success\");"
+                    };
+
+                filePreprocessor.ParseScript(lines, new FileParserContext());
+                testableDirectiveProcessor.InheritedProcessLineCalled.ShouldBeTrue();
+            }
+
+            [Fact]
+            public void ShouldProcessALoadDirectiveWhenItComesAfterACustomDirective()
+            {
+                var testableDirectiveProcessor = new DirectiveLineProcessorTests.TestableDirectiveLineProcessor();
+                var loadLineProcessor = new TestableLoadLineProcessor(_fileSystem.Object);
+                var filePreprocessor = GetFilePreProcessor(testableDirectiveProcessor, loadLineProcessor);
+                var lines = new List<string>
+                    {
+                        "#Test something",
+                        "#load myscript.csx",
+                        "Console.WriteLine(\"Success\");"
+                    };
+
+                filePreprocessor.ParseScript(lines, new FileParserContext());
+                loadLineProcessor.InheritedProcessLineCalled.ShouldBeTrue();
+            }
+
+            private IFilePreProcessor GetFilePreProcessor(ILineProcessor customDirectiveProcessor, ILineProcessor loadLineProcessor)
+            {
+                var lineProcessors = new ILineProcessor[]
+                    {
+                        new UsingLineProcessor(),
+                        new ReferenceLineProcessor(_fileSystem.Object),
+                        loadLineProcessor,
+                        customDirectiveProcessor
+                    };
+
+                return new FilePreProcessor(_fileSystem.Object, Mock.Of<ILog>(), lineProcessors);
+            }
+
+            public class TestableLoadLineProcessor : LoadLineProcessor
+            {
+                public TestableLoadLineProcessor(IFileSystem fileSystem)
+                    : base(fileSystem)
+                { }
+                public bool InheritedProcessLineCalled { get; private set; }
+                protected override bool ProcessLine(IFileParser parser, FileParserContext context, string line)
+                {
+                    InheritedProcessLineCalled = true;
+                    return true;
+                }
             }
         }
     }

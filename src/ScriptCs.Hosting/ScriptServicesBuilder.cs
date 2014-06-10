@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Common.Logging;
-using NuGet;
 using ScriptCs.Contracts;
 
 using LogLevel = ScriptCs.Contracts.LogLevel;
@@ -45,7 +42,7 @@ namespace ScriptCs.Hosting
 
             if (_runtimeServices == null)
             {
-                _runtimeServices = new RuntimeServices(_logger, Overrides, LineProcessors, ConsoleInstance,
+                _runtimeServices = new RuntimeServices(_logger, Overrides, ConsoleInstance,
                                                                        _scriptEngineType, _scriptExecutorType,
                                                                        initDirectoryCatalog,
                                                                        InitializationServices, _scriptName);
