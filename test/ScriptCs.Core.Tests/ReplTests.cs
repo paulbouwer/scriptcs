@@ -205,6 +205,24 @@ namespace ScriptCs.Tests
             }
 
             [Fact]
+            public void ShouldRemoveInvalidNamespacesIfScriptResultContainsany()
+            {
+                _mocks.FilePreProcessor.Setup(x => x.ProcessScript(It.Is<string>(i => i == "#load foo.csx")))
+                    .Returns(new FilePreProcessorResult { Namespaces = new List<string> { "Foo", "Bar" } });
+                _mocks.ScriptEngine.Setup(
+                    x => x.Execute(
+                            It.IsAny<string>(),
+                            It.IsAny<string[]>(),
+                            It.IsAny<AssemblyReferences>(),
+                            It.IsAny<IEnumerable<string>>(),
+                            It.IsAny<ScriptPackSession>())).Returns(new ScriptResult(invalidNamespaces: new string[] {"Foo"}));
+
+                _repl.Execute("#load foo.csx");
+                _repl.Namespaces.Count().ShouldEqual(ScriptExecutor.DefaultNamespaces.Count() + 1);
+                _repl.Namespaces.ShouldNotContain("Foo");
+            }
+
+            [Fact]
             public void CatchesExceptionsAndWritesThemInRed()
             {
                 _mocks.ScriptEngine.Setup(
@@ -294,8 +312,8 @@ namespace ScriptCs.Tests
                 _repl.Initialize(Enumerable.Empty<string>(), Enumerable.Empty<IScriptPack>());
                 _repl.Execute("#r \"my.dll\"");
 
-                //default references = 6, + 1 we just added
-                _repl.References.PathReferences.Count().ShouldEqual(7);
+                //default references = 7, + 1 we just added
+                _repl.References.PathReferences.Count().ShouldEqual(8);
             }
 
             [Fact]
@@ -603,7 +621,7 @@ namespace ScriptCs.Tests
 
                 var helloCommand = new Mock<IReplCommand>();
                 helloCommand.SetupGet(x => x.CommandName).Returns("hello");
-                helloCommand.Setup(x => x.Execute(It.IsAny<IScriptExecutor>(), It.IsAny<object[]>()))
+                helloCommand.Setup(x => x.Execute(It.IsAny<IRepl>(), It.IsAny<object[]>()))
                     .Returns(returnValue);
 
                 var mocks = new Mocks { ReplCommands = new[] { helloCommand } };
@@ -624,7 +642,7 @@ namespace ScriptCs.Tests
 
                 var helloCommand = new Mock<IReplCommand>();
                 helloCommand.SetupGet(x => x.CommandName).Returns("hello");
-                helloCommand.Setup(x => x.Execute(It.IsAny<IScriptExecutor>(), It.IsAny<object[]>()))
+                helloCommand.Setup(x => x.Execute(It.IsAny<IRepl>(), It.IsAny<object[]>()))
                     .Returns(returnValue);
 
                 var mocks = new Mocks { ReplCommands = new[] { helloCommand } };

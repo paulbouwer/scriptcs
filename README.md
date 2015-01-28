@@ -1,5 +1,8 @@
-# scriptcs [![*NIX Build Status](https://travis-ci.org/scriptcs/scriptcs.svg?branch=dev)](https://travis-ci.org/scriptcs/scriptcs) [![Windows Build Status](<http://teamcity.codebetter.com/app/rest/builds/buildType:(id:bt949)/statusIcon>)](http://ci.scriptcs.net)
+# scriptcs
 
+[![Chocolatey Version](http://img.shields.io/chocolatey/v/scriptcs.svg?style=flat-square)](http://chocolatey.org/packages/scriptcs) [![Chocolatey Downloads](http://img.shields.io/chocolatey/dt/scriptcs.svg?style=flat-square)](http://chocolatey.org/packages/scriptcs) [![NuGet version (ScriptCs.Hosting)](https://img.shields.io/nuget/v/ScriptCs.Hosting.svg?style=flat-square)](https://www.nuget.org/packages/ScriptCs.Hosting/)
+
+[![*nix Build Status](http://img.shields.io/travis/scriptcs/scriptcs/dev.svg?style=flat-square&label=linux-build)](https://travis-ci.org/scriptcs/scriptcs) [![Windows Build Status](http://img.shields.io/teamcity/codebetter/Scriptcs_Ci.svg?style=flat-square&label=windows-build)](http://ci.scriptcs.net) [![Coverity Scan Build Status](https://img.shields.io/badge/coverity-passed-brightgreen.svg?style=flat-square)](https://scan.coverity.com/projects/2356)
 
 ## What is it?
 
@@ -20,6 +23,10 @@ scriptcs frees you from Visual Studio, without sacrificing the advantages of a s
 Releases and nightly builds should be installed using [Chocolatey](http://chocolatey.org/). To install Chocolatey, execute the following command in your command prompt:
 
     @powershell -NoProfile -ExecutionPolicy Unrestricted -Command "iex ((New-Object Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && SET PATH=%PATH%;%systemdrive%\chocolatey\bin
+
+If the above fails with the error indicating that proxy authentication is required (i.e. [HTTP 407](http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.4.8)) then try again with the following on the command prompt that uses your default credentials:
+
+    @powershell -NoProfile -ExecutionPolicy Unrestricted -Command "[Net.WebRequest]::DefaultWebProxy.Credentials = [Net.CredentialCache]::DefaultCredentials; iex ((New-Object Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && SET PATH=%PATH%;%systemdrive%\chocolatey\bin
 
 ### Installing scriptcs
 
@@ -84,7 +91,7 @@ Hello, world!
 C:\>
 ```
 
-REPL supports all C# language constructs (i.e. class defnition, method definition), as well as multi-line input. For example:
+REPL supports all C# language constructs (i.e. class definition, method definition), as well as multi-line input. For example:
 
 ```batchfile
 C:\> scriptcs
@@ -234,7 +241,7 @@ Instructions for debugging scripts using Visual Studio can be found on the [wiki
 
 You can install any NuGet packages directly from the scriptcs CLI. This will pull the relevant packages from NuGet, and install them in the packages folder.
 
-Once the packages are installed, you can simply start using them in your script code directly (just import the namespaces - no additional bootstraping or DLL referencing is needed).
+Once the packages are installed, you can simply start using them in your script code directly (just import the namespaces - no additional bootstrapping or DLL referencing is needed).
 
 The `install` command will also create a `packages.config` file if you don't have one - so that you can easily redistribute your script (without having to copy the package binaries).
 

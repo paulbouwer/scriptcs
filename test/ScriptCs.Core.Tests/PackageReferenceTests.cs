@@ -1,34 +1,34 @@
 ﻿using System;
 using System.Runtime.Versioning;
 using Should;
-using Xunit;
+using Xunit.Extensions;
 
 namespace ScriptCs.Tests
 {
     public class PackageReferenceTests
     {
-        public class Constructor
+        public class TheConstructor
         {
-            [Fact]
-            public void WhenStringVersionIsEmptyVersionShouldBeEmpty()
+            [Theory]
+            [InlineData(null, null, null)]
+            [InlineData("", null, null)]
+            [InlineData(" ", null, null)]
+            [InlineData("1.0.1", "1.0.1", null)]
+            [InlineData("1.0.1-alpha", "1.0.1", "alpha")]
+            [InlineData("1.0.1-beta-2", "1.0.1", "beta-2")]
+            public void ParsesVersionAndSpecialVersion(
+                string version, string expectedVersion, string expectedSpecialVersion)
             {
-                var p = new PackageReference("packageId", new FrameworkName(".NETFramework,Version=v4.0"), "");
-                p.Version.ShouldEqual(new Version());
-            }
+                // Arrange, Act
+                var packageReference = new PackageReference(
+                    "packageId", new FrameworkName(".NETFramework,Version=v4.0"), version);
 
-            [Fact]
-            public void WhenStringVersionHasNormalValueVersionShouldBeEqualToThat()
-            {
-                var p = new PackageReference("packageId", new FrameworkName(".NETFramework,Version=v4.0"), "1.0.1");
-                p.Version.ShouldEqual(new Version("1.0.1"));
-            }
+                // Assert
+                packageReference.Version.ShouldEqual(string.IsNullOrWhiteSpace(expectedVersion)
+                    ? new Version()
+                    : new Version(expectedVersion));
 
-            [Fact]
-            public void WhenStringVersionHasSpecialValueVersionShouldBeEqualToNormalAndSpecialVersionShouldBeSet()
-            {
-                var p = new PackageReference("packageId", new FrameworkName(".NETFramework,Version=v4.0"), "1.0.1-alpha");
-                p.Version.ShouldEqual(new Version("1.0.1"));
-                p.SpecialVersion.ShouldEqual("alpha");
+                packageReference.SpecialVersion.ShouldEqual(expectedSpecialVersion);
             }
         }
     }

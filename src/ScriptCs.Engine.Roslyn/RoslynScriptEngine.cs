@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using Common.Logging;
 using Roslyn.Compilers;
 using Roslyn.Compilers.CSharp;
@@ -9,6 +8,7 @@ using Roslyn.Scripting;
 using Roslyn.Scripting.CSharp;
 
 using ScriptCs.Contracts;
+using System.Text.RegularExpressions;
 
 namespace ScriptCs.Engine.Roslyn
 {
@@ -18,6 +18,7 @@ namespace ScriptCs.Engine.Roslyn
         private readonly IScriptHostFactory _scriptHostFactory;
 
         public const string SessionKey = "Session";
+        private const string InvalidNamespaceError = "error CS0246";
 
         public RoslynScriptEngine(IScriptHostFactory scriptHostFactory, ILog logger)
         {
@@ -52,8 +53,11 @@ namespace ScriptCs.Engine.Roslyn
 
             SessionState<Session> sessionState;
 
-            if (!scriptPackSession.State.ContainsKey(SessionKey))
+            var isFirstExecution = !scriptPackSession.State.ContainsKey(SessionKey);
+
+            if (isFirstExecution)
             {
+                code = code.DefineTrace();
                 var host = _scriptHostFactory.CreateScriptHost(new ScriptPackManager(scriptPackSession.Contexts), scriptArgs);
                 Logger.Debug("Creating session");
 
@@ -125,7 +129,32 @@ namespace ScriptCs.Engine.Roslyn
             }
 
             Logger.Debug("Starting execution");
+
             var result = Execute(code, sessionState.Session);
+
+            if (result.InvalidNamespaces.Any())
+            {
+                var pendingNamespacesField = sessionState.Session.GetType().GetField("pendingNamespaces", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+                if (pendingNamespacesField != null)
+                {
+                    var pendingNamespacesValue = (ReadOnlyArray<string>)pendingNamespacesField.GetValue(sessionState.Session);
+                    //no need to check this for null as ReadOnlyArray is a value type
+
+                    if (pendingNamespacesValue.Any())
+                    {
+                        var fixedNamespaces = pendingNamespacesValue.ToList();
+
+                        foreach (var @namespace in result.InvalidNamespaces)
+                        {
+                            sessionState.Namespaces.Remove(@namespace);
+                            fixedNamespaces.Remove(@namespace);
+                        }
+                        pendingNamespacesField.SetValue(sessionState.Session, ReadOnlyArray<string>.CreateFrom<string>(fixedNamespaces));
+                    }
+                }
+            }
+
             Logger.Debug("Finished execution");
             return result;
         }
@@ -133,11 +162,6 @@ namespace ScriptCs.Engine.Roslyn
         protected virtual ScriptResult Execute(string code, Session session)
         {
             Guard.AgainstNullArgument("session", session);
-
-            if (!IsCompleteSubmission(code))
-            {
-                return ScriptResult.Incomplete;
-            }
 
             try
             {
@@ -147,6 +171,10 @@ namespace ScriptCs.Engine.Roslyn
                 {
                     return new ScriptResult(returnValue: submission.Execute());
                 }
+                catch (AggregateException ex)
+                {
+                    return new ScriptResult(executionException: ex.InnerException);
+                }
                 catch (Exception ex)
                 {
                     return new ScriptResult(executionException: ex);
@@ -154,11 +182,17 @@ namespace ScriptCs.Engine.Roslyn
             }
             catch (Exception ex)
             {
+                if (ex.Message.StartsWith(InvalidNamespaceError))
+                {
+                    var offendingNamespace = Regex.Match(ex.Message, @"\'([^']*)\'").Groups[1].Value;
+                    return new ScriptResult(compilationException: ex, invalidNamespaces: new string[1] {offendingNamespace});
+                }
+           
                 return new ScriptResult(compilationException: ex);
             }
         }
 
-        private static bool IsCompleteSubmission(string code)
+        protected static bool IsCompleteSubmission(string code)
         {
             var options = new ParseOptions(
                 CompatibilityMode.None,

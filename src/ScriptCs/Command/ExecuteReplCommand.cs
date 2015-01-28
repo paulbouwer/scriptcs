@@ -1,48 +1,49 @@
 ﻿using System;
-using System.Collections.Generic;
 using Common.Logging;
 using ScriptCs.Contracts;
 
 namespace ScriptCs.Command
 {
-    internal class ExecuteReplCommand : IScriptCommand
+    internal class ExecuteReplCommand : IExecuteReplCommand
     {
-        private readonly IScriptPackResolver _scriptPackResolver;
-        private readonly IAssemblyResolver _assemblyResolver;
-        private readonly IEnumerable<IReplCommand> _replCommands;
-        private readonly IFilePreProcessor _filePreProcessor;
-        private readonly IObjectSerializer _serializer;
-        private readonly IScriptEngine _scriptEngine;
         private readonly string _scriptName;
         private readonly string[] _scriptArgs;
         private readonly IFileSystem _fileSystem;
-        private readonly IConsole _console;
+        private readonly IScriptPackResolver _scriptPackResolver;
+        private readonly IRepl _repl;
         private readonly ILog _logger;
+        private readonly IConsole _console;
+        private readonly IAssemblyResolver _assemblyResolver;
+        private readonly IFileSystemMigrator _fileSystemMigrator;
 
         public ExecuteReplCommand(
             string scriptName,
             string[] scriptArgs,
             IFileSystem fileSystem,
             IScriptPackResolver scriptPackResolver,
-            IScriptEngine scriptEngine,
-            IFilePreProcessor filePreProcessor,
-            IObjectSerializer serializer,
+            IRepl repl,
             ILog logger,
             IConsole console,
             IAssemblyResolver assemblyResolver,
-            IEnumerable<IReplCommand> replCommands)
+            IFileSystemMigrator fileSystemMigrator)
         {
+            Guard.AgainstNullArgument("fileSystem", fileSystem);
+            Guard.AgainstNullArgument("scriptPackResolver", scriptPackResolver);
+            Guard.AgainstNullArgument("repl", repl);
+            Guard.AgainstNullArgument("logger", logger);
+            Guard.AgainstNullArgument("console", console);
+            Guard.AgainstNullArgument("assemblyResolver", assemblyResolver);
+            Guard.AgainstNullArgument("fileSystemMigrator", fileSystemMigrator);
+
             _scriptName = scriptName;
             _scriptArgs = scriptArgs;
             _fileSystem = fileSystem;
             _scriptPackResolver = scriptPackResolver;
-            _scriptEngine = scriptEngine;
-            _filePreProcessor = filePreProcessor;
-            _serializer = serializer;
+            _repl = repl;
             _logger = logger;
             _console = console;
             _assemblyResolver = assemblyResolver;
-            _replCommands = replCommands;
+            _fileSystemMigrator = fileSystemMigrator;
         }
 
         public string[] ScriptArgs
@@ -52,24 +53,25 @@ namespace ScriptCs.Command
 
         public CommandResult Execute()
         {
+            _fileSystemMigrator.Migrate();
+
             _console.WriteLine("scriptcs (ctrl-c to exit)" + Environment.NewLine);
-            var repl = new Repl(_scriptArgs, _fileSystem, _scriptEngine, _serializer, _logger, _console, _filePreProcessor, _replCommands);
 
             var workingDirectory = _fileSystem.CurrentDirectory;
             var assemblies = _assemblyResolver.GetAssemblyPaths(workingDirectory);
             var scriptPacks = _scriptPackResolver.GetPacks();
 
-            repl.Initialize(assemblies, scriptPacks, ScriptArgs);
+            _repl.Initialize(assemblies, scriptPacks, ScriptArgs);
 
             try
             {
                 if (!string.IsNullOrWhiteSpace(_scriptName))
                 {
                     _logger.Info(string.Format("Loading script: {0}", _scriptName));
-                    repl.Execute(string.Format("#load {0}", _scriptName));
+                    _repl.Execute(string.Format("#load {0}", _scriptName));
                 }
 
-                while (ExecuteLine(repl))
+                while (ExecuteLine(_repl))
                 {
                 }
 
@@ -77,15 +79,15 @@ namespace ScriptCs.Command
             }
             catch (Exception ex)
             {
-                _logger.Error(ex.Message);
+                _logger.Error(ex);
                 return CommandResult.Error;
             }
 
-            repl.Terminate();
+            _repl.Terminate();
             return CommandResult.Success;
         }
 
-        private bool ExecuteLine(Repl repl)
+        private bool ExecuteLine(IRepl repl)
         {
             _console.Write(string.IsNullOrWhiteSpace(repl.Buffer) ? "> " : "* ");
 
